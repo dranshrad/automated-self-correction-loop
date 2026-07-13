@@ -81,17 +81,20 @@ class PytestVerifier(Verifier):
             return _pytest_result(self._run_in(Path(tmp), code))
 
     def _run_in(self, workdir: Path, code: str) -> ExecutionResult:
+        workdir = workdir.resolve()
         (workdir / self._module_name).write_text(code, encoding="utf-8")
         dest_tests = workdir / "tests"
         if self._tests_path.is_file():
             dest_tests.mkdir(parents=True, exist_ok=True)
             shutil.copy2(self._tests_path, dest_tests / self._tests_path.name)
-            pytest_target = str(dest_tests / self._tests_path.name)
+            # Target must be relative to cwd=workdir (or absolute). A repo-relative
+            # path would be resolved incorrectly from inside the workspace.
+            pytest_target = f"tests/{self._tests_path.name}"
         else:
             if dest_tests.exists():
                 shutil.rmtree(dest_tests)
             shutil.copytree(self._tests_path, dest_tests)
-            pytest_target = str(dest_tests)
+            pytest_target = "tests"
 
         return run_command(
             [sys.executable, "-m", "pytest", "-q", "--tb=short", pytest_target],
