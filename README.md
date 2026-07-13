@@ -2,11 +2,53 @@
 
 **Execution-grounded verified repair engine** · **AGPL-3.0-or-later** · Python 3.11+ · Typer CLI
 
-ASCL is not an LLM retry wrapper. It is a sandboxed, diagnosis-driven repair loop:
+ASCL is not an LLM retry wrapper. It is a **process-isolated, resource-limited**,
+diagnosis-driven repair loop:
 
 **Reasoning → Execution → Observation → Diagnosis → Repair → Verification → Metrics**
 
 An LLM proposes Python; static checks and an isolated subprocess observe the result; a deterministic **failure taxonomy** diagnoses the class of failure; taxonomy-conditioned repair directives + AST-diff history steer the next attempt; rich metrics make reliability measurable.
+
+## Demo: classify → repair → pass
+
+Watch the concept in ~15 seconds (mock provider, no API key):
+
+1. **Terminal** — [docs/demo/heal-fibonacci.md](docs/demo/heal-fibonacci.md) (transcript) · play locally: `asciinema play docs/demo/heal-fibonacci.cast`
+2. **Artifacts** — [examples/demo/fibonacci-heal/](examples/demo/fibonacci-heal/) (checked-in `report.json` + `metrics.json`)
+
+```bash
+bash scripts/regenerate_demo.sh
+```
+
+**Iteration 1 diagnosis** (from the checked-in run):
+
+```json
+{
+  "iteration": 1,
+  "failure_class": "assertion",
+  "classification_confidence": 0.9,
+  "stage": "behavioral",
+  "verification_summary": "pytest failed (exit 1)",
+  "repair_hint": "Repair strategy: satisfy the failing assertion/test expectation; keep the public API unchanged and prefer a correct algorithm over cosmetic patches."
+}
+```
+
+**Run metrics** (`examples/demo/fibonacci-heal/metrics.json`):
+
+```json
+{
+  "iterations": 2,
+  "success": true,
+  "first_pass_success": false,
+  "exit_reason": "success",
+  "oscillation_count": 0,
+  "failure_class_histogram": { "assertion": 1 },
+  "stage_failure_counts": { "behavioral": 1 },
+  "prompt_tokens_estimate_total": 829
+}
+```
+
+Iteration 2 then passes the frozen pytest suite — the full JSON lives in the demo folder.
 
 ## Dual modes
 
@@ -22,7 +64,7 @@ flowchart TD
   prompt[TaskPrompt] --> gen[Generator]
   gen --> static[StaticAnalysis]
   static -->|fail| classify[FailureClassifier]
-  static -->|pass| exec[SandboxedExecution]
+  static -->|pass| exec[IsolatedExecution]
   exec --> verify[BehavioralVerifier]
   verify -->|fail| classify
   classify --> repairHint[TaxonomyRepairDirective]
@@ -70,8 +112,8 @@ Only the behavioral verifier differs between `run` and `heal`.
 
 Most “agent coding” demos ask a model to regenerate until something works. ASCL treats the LLM as a proposer inside a **control loop** with:
 
-- cheap static rejection before sandbox spend
-- process isolation against runaway code
+- cheap static rejection before spending an isolated process
+- process isolation + resource limits against runaway code
 - diagnosis before the next prompt (not raw stderr alone)
 - measurable outcomes for research and regression
 
@@ -99,6 +141,8 @@ poetry run ascl heal \
   --max-iterations 4 \
   --artifact-dir ./artifacts/fib
 ```
+
+Or use the checked-in demo path: `examples/demo/fibonacci-heal/` (see [Demo](#demo-classify--repair--pass)).
 
 Artifacts include `report.json` (per-iteration taxonomy) and `metrics.json`.
 
@@ -139,7 +183,7 @@ src/ascl/
   prompts.py          # System + correction templates
 ```
 
-## Sandbox knobs
+## Isolation knobs
 
 ```bash
 poetry run ascl run --provider mock --prompt "..." \
@@ -149,9 +193,13 @@ poetry run ascl run --provider mock --prompt "..." \
 
 Use `--no-resource-limits` or `--no-lint` when debugging the harness itself.
 
+These knobs are **best-effort process isolation**, not a container/seccomp jail.
+
 ## Security
 
-ASCL executes **model-generated code** in a subprocess. Timeouts, output caps, and `resource` limits are **best-effort isolation**, not a container/seccomp jail. See [SECURITY.md](SECURITY.md).
+ASCL executes **model-generated code** in a subprocess with timeouts, output caps, and
+optional Unix `resource` limits. That is **process isolation**, not a container/seccomp
+jail. See [SECURITY.md](SECURITY.md).
 
 ## Roadmap
 
@@ -162,7 +210,7 @@ ASCL executes **model-generated code** in a subprocess. Timeouts, output caps, a
 | **v1.0** | Multi-agent specialized repair, knowledge retrieval, adaptive policies |
 | **v2.0** | Autonomous software improvement platform (repo-wide graphs, benchmarks) |
 
-Also deferred: Docker/gVisor jail, cgroup limits, multi-file healing, tiktoken budgets, HumanEval/SWE-bench harnesses.
+Also deferred: Docker/gVisor executor (`--executor docker`), cgroup limits, multi-file healing, tiktoken budgets, HumanEval/SWE-bench harnesses.
 
 ## License
 

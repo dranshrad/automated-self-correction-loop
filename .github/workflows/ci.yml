@@ -40,3 +40,36 @@ jobs:
         env:
           ASCL_PROVIDER: mock
         run: poetry run pytest
+
+      - name: Demo fixtures exist
+        run: |
+          test -f examples/demo/fibonacci-heal/metrics.json
+          test -f examples/demo/fibonacci-heal/report.json
+          test -f docs/demo/heal-fibonacci.md
+
+      - name: Mock heal metrics schema
+        env:
+          ASCL_PROVIDER: mock
+        run: |
+          OUT=$(mktemp -d)
+          poetry run ascl heal \
+            --provider mock \
+            --no-lint \
+            --prompt "$(cat examples/fibonacci/PROMPT.txt)" \
+            --tests examples/fibonacci/test_fib.py \
+            --max-iterations 4 \
+            --artifact-dir "$OUT"
+          OUT="$OUT" python - <<'PY'
+          import json, os
+          out = os.environ["OUT"]
+          metrics = json.loads(open(f"{out}/metrics.json", encoding="utf-8").read())
+          report = json.loads(open(f"{out}/report.json", encoding="utf-8").read())
+          assert "success" in metrics
+          assert "failure_class_histogram" in metrics
+          assert "stage_failure_counts" in metrics
+          assert report["iterations"], "expected at least one iteration"
+          failed = [i for i in report["iterations"] if not i["verification"]["success"]]
+          if failed:
+              assert failed[0].get("failure_class"), "failed iter needs failure_class"
+          print("demo schema ok", metrics["success"], metrics["failure_class_histogram"])
+          PY

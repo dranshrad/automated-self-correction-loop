@@ -48,8 +48,8 @@ _REPAIR_HINTS: dict[FailureClass, str] = {
         "or define missing helpers locally."
     ),
     FailureClass.DEPENDENCY: (
-        "Repair strategy: avoid third-party packages that are not available in the sandbox; "
-        "rewrite using stdlib."
+        "Repair strategy: avoid third-party packages that are not available in the "
+        "execution environment; rewrite using stdlib."
     ),
     FailureClass.ASSERTION: (
         "Repair strategy: satisfy the failing assertion/test expectation; keep the public "

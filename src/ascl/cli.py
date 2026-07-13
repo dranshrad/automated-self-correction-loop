@@ -22,7 +22,7 @@ from ascl.runner import DEFAULT_MAX_PROCS, DEFAULT_MEMORY_MB, DEFAULT_TIMEOUT_SE
 
 app = typer.Typer(
     name="ascl",
-    help="Automated Self-Correction Loop — sandboxed self-healing Python agent harness.",
+    help="Automated Self-Correction Loop — process-isolated self-healing Python agent harness.",
     no_args_is_help=True,
     add_completion=False,
 )

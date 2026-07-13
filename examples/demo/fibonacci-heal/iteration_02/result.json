@@ -1,0 +1,28 @@
+{
+  "iteration": 2,
+  "code": "def fib(n: int) -> int:\n    if n < 0:\n        raise ValueError('n must be non-negative')\n    if n < 2:\n        return n\n    a, b = 0, 1\n    for _ in range(2, n + 1):\n        a, b = b, a + b\n    return b",
+  "verification": {
+    "success": true,
+    "summary": "pytest passed",
+    "details": "stdout:\n..                                                                       [100%]",
+    "execution": {
+      "exit_code": 0,
+      "stdout": "..                                                                       [100%]\n",
+      "stderr": "",
+      "timed_out": false,
+      "duration_ms": 340.8814999856986,
+      "truncated": false
+    },
+    "stage": "behavioral"
+  },
+  "prompt_tokens_estimate": 556,
+  "raw_model_response": "```python\ndef fib(n: int) -> int:\n    if n < 0:\n        raise ValueError('n must be non-negative')\n    if n < 2:\n        return n\n    a, b = 0, 1\n    for _ in range(2, n + 1):\n        a, b = b, a + b\n    return b\n```",
+  "code_digest": "8aa33bf7f034c6bbf948f31cf566bebc4f4052f095cd66baccd600e3699e7144",
+  "structural_diff": "In iteration 2, structural changes:\n  modified: fib",
+  "oscillation_detected": false,
+  "failure_class": null,
+  "repair_hint": "",
+  "classification_confidence": null,
+  "classification_evidence": "",
+  "classification_hypothesis": ""
+}

@@ -1,0 +1,87 @@
+{
+  "mode": "heal",
+  "prompt": "Write a Python module `solution.py` that defines `fib(n: int) -> int` returning the\nnth Fibonacci number (0-indexed: fib(0)=0, fib(1)=1). Raise ValueError for negative n.",
+  "max_iterations": 4,
+  "timeout_seconds": 5.0,
+  "provider": "mock",
+  "model": "mock-v1",
+  "exit_reason": "success",
+  "iterations": [
+    {
+      "iteration": 1,
+      "code": "def fib(n: int) -> int:\n    if n < 0:\n        raise ValueError('n must be non-negative')\n    if n < 2:\n        return n\n    return fib(n - 1) + fib(n - 2) + 1  # intentional bug",
+      "verification": {
+        "success": false,
+        "summary": "pytest failed (exit 1)",
+        "details": "Summary: pytest failed (exit 1)\n\nDetails:\nstdout:\n.F                                                                       [100%]\n=================================== FAILURES ===================================\n_______________________________ test_fib_values ________________________________\ntests/test_fib.py:10: in test_fib_values\n    assert fib(5) == 5\nE   assert 12 == 5\nE    +  where 12 = fib(5)\n=========================== short test summary info ============================\nFAILED tests/test_fib.py::test_fib_values - assert 12 == 5\n",
+        "execution": {
+          "exit_code": 1,
+          "stdout": ".F                                                                       [100%]\n=================================== FAILURES ===================================\n_______________________________ test_fib_values ________________________________\ntests/test_fib.py:10: in test_fib_values\n    assert fib(5) == 5\nE   assert 12 == 5\nE    +  where 12 = fib(5)\n=========================== short test summary info ============================\nFAILED tests/test_fib.py::test_fib_values - assert 12 == 5\n",
+          "stderr": "",
+          "timed_out": false,
+          "duration_ms": 492.11866699624807,
+          "truncated": false
+        },
+        "stage": "behavioral"
+      },
+      "prompt_tokens_estimate": 273,
+      "raw_model_response": "```python\ndef fib(n: int) -> int:\n    if n < 0:\n        raise ValueError('n must be non-negative')\n    if n < 2:\n        return n\n    return fib(n - 1) + fib(n - 2) + 1  # intentional bug\n```",
+      "code_digest": "20edd479fc14cb7bc15c87d8974c74d06ef25da1dc270c40b1a386eb43421277",
+      "structural_diff": "",
+      "oscillation_detected": false,
+      "failure_class": "assertion",
+      "repair_hint": "Repair strategy: satisfy the failing assertion/test expectation; keep the public API unchanged and prefer a correct algorithm over cosmetic patches.",
+      "classification_confidence": 0.9,
+      "classification_evidence": "assertion/pytest failure signal",
+      "classification_hypothesis": "Behavioral tests rejected the candidate output/state."
+    },
+    {
+      "iteration": 2,
+      "code": "def fib(n: int) -> int:\n    if n < 0:\n        raise ValueError('n must be non-negative')\n    if n < 2:\n        return n\n    a, b = 0, 1\n    for _ in range(2, n + 1):\n        a, b = b, a + b\n    return b",
+      "verification": {
+        "success": true,
+        "summary": "pytest passed",
+        "details": "stdout:\n..                                                                       [100%]",
+        "execution": {
+          "exit_code": 0,
+          "stdout": "..                                                                       [100%]\n",
+          "stderr": "",
+          "timed_out": false,
+          "duration_ms": 340.8814999856986,
+          "truncated": false
+        },
+        "stage": "behavioral"
+      },
+      "prompt_tokens_estimate": 556,
+      "raw_model_response": "```python\ndef fib(n: int) -> int:\n    if n < 0:\n        raise ValueError('n must be non-negative')\n    if n < 2:\n        return n\n    a, b = 0, 1\n    for _ in range(2, n + 1):\n        a, b = b, a + b\n    return b\n```",
+      "code_digest": "8aa33bf7f034c6bbf948f31cf566bebc4f4052f095cd66baccd600e3699e7144",
+      "structural_diff": "In iteration 2, structural changes:\n  modified: fib",
+      "oscillation_detected": false,
+      "failure_class": null,
+      "repair_hint": "",
+      "classification_confidence": null,
+      "classification_evidence": "",
+      "classification_hypothesis": ""
+    }
+  ],
+  "final_code": "def fib(n: int) -> int:\n    if n < 0:\n        raise ValueError('n must be non-negative')\n    if n < 2:\n        return n\n    a, b = 0, 1\n    for _ in range(2, n + 1):\n        a, b = b, a + b\n    return b",
+  "metrics": {
+    "iterations": 2,
+    "max_iterations": 4,
+    "success": true,
+    "first_pass_success": false,
+    "exit_reason": "success",
+    "oscillation_count": 0,
+    "oscillation_rate": 0.0,
+    "prompt_tokens_estimate_total": 829,
+    "prompt_tokens_estimate_mean": 414.5,
+    "total_execution_ms": 833.0001669819467,
+    "stage_failure_counts": {
+      "behavioral": 1
+    },
+    "failure_class_histogram": {
+      "assertion": 1
+    },
+    "mean_classification_confidence": 0.9
+  }
+}

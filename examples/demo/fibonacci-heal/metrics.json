@@ -1,0 +1,19 @@
+{
+  "iterations": 2,
+  "max_iterations": 4,
+  "success": true,
+  "first_pass_success": false,
+  "exit_reason": "success",
+  "oscillation_count": 0,
+  "oscillation_rate": 0.0,
+  "prompt_tokens_estimate_total": 829,
+  "prompt_tokens_estimate_mean": 414.5,
+  "total_execution_ms": 833.0001669819467,
+  "stage_failure_counts": {
+    "behavioral": 1
+  },
+  "failure_class_histogram": {
+    "assertion": 1
+  },
+  "mean_classification_confidence": 0.9
+}
