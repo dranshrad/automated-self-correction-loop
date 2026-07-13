@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install Poetry
+        run: pipx install poetry
+
+      - name: Install dependencies
+        run: |
+          poetry install --no-interaction --with dev
+
+      - name: Ruff check
+        run: poetry run ruff check src tests
+
+      - name: Ruff format
+        run: poetry run ruff format --check src tests
+
+      - name: Mypy
+        run: poetry run mypy
+
+      - name: Pytest
+        env:
+          ASCL_PROVIDER: mock
+        run: poetry run pytest

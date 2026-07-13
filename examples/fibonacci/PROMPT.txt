@@ -1,0 +1,2 @@
+Write a Python module `solution.py` that defines `fib(n: int) -> int` returning the
+nth Fibonacci number (0-indexed: fib(0)=0, fib(1)=1). Raise ValueError for negative n.

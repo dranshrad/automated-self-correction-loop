@@ -1,0 +1,41 @@
+# Byte-compiled / cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+coverage.xml
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+
+# Secrets and local env
+.env
+.env.local
+*.pem
+
+# Artifacts from ascl runs
+artifacts/
+.ascl/
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+*.swp
+.netlify/
+
+# Local tooling
+.tox/
+.nox/

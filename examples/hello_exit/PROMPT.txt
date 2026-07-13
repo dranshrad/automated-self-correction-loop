@@ -1,0 +1,1 @@
+Print exactly the line `hello ascl` to stdout and exit successfully.
