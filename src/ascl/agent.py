@@ -12,8 +12,8 @@ from collections.abc import Sequence
 from ascl.models import ChatMessage, ProviderName
 
 DEFAULT_MODELS: dict[ProviderName, str] = {
-    ProviderName.ANTHROPIC: "claude-sonnet-4-20250514",
-    ProviderName.OPENAI: "gpt-4o",
+    ProviderName.ANTHROPIC: "claude-sonnet-5",
+    ProviderName.OPENAI: "gpt-5.6-terra",
     ProviderName.MOCK: "mock-v1",
 }
 

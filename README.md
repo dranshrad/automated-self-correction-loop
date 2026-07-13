@@ -13,8 +13,9 @@ An LLM proposes Python; static checks and an isolated subprocess observe the res
 
 Watch the concept in ~15 seconds (mock provider, no API key):
 
-1. **Terminal** — [docs/demo/heal-fibonacci.md](docs/demo/heal-fibonacci.md) (transcript) · play locally: `asciinema play docs/demo/heal-fibonacci.cast`
-2. **Artifacts** — [examples/demo/fibonacci-heal/](examples/demo/fibonacci-heal/) (checked-in `report.json` + `metrics.json`)
+1. **Terminal recording** — `asciinema play docs/demo/heal-fibonacci.cast`
+2. **Transcript** — [docs/demo/heal-fibonacci.md](docs/demo/heal-fibonacci.md)
+3. **Artifacts** — [examples/demo/fibonacci-heal/](examples/demo/fibonacci-heal/) (checked-in `report.json` + `metrics.json`)
 
 ```bash
 bash scripts/regenerate_demo.sh
@@ -216,4 +217,14 @@ Also deferred: Docker/gVisor executor (`--executor docker`), cgroup limits, mult
 
 This project is licensed under the **GNU Affero General Public License v3.0 or later**. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
 
-If you run a modified version as a network service, AGPL requires you to offer the corresponding source to users who interact with it remotely.
+If you run a modified version as a network service, AGPL requires you to offer the corresponding source to users who interact with it remotely. That is a deliberate copyleft choice for this suite — not an unexamined default.
+
+## Related projects
+
+| Project | Role |
+|---|---|
+| [codex-ast-mapper](https://github.com/dranshrad/codex-ast-mapper) | Compress repositories into token-budgeted LLM context |
+| [llm-cst-refactorer](https://github.com/dranshrad/llm-cst-refactorer) | Format-preserving typing & docstring refactors |
+| [automated-self-correction-loop](https://github.com/dranshrad/automated-self-correction-loop) (ASCL) | Execute → diagnose → heal loop |
+| [voice-notes-to-anthropic-artifacts](https://github.com/dranshrad/voice-notes-to-anthropic-artifacts) | Local STT → Anthropic → `~/Artifacts` |
+| [anthropic-audio-gateway](https://github.com/dranshrad/anthropic-audio-gateway) | Browser audio ↔ realtime provider adapters |
