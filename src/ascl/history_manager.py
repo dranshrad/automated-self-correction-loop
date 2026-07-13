@@ -70,6 +70,7 @@ class HistoryManager:
         latest_failure: str | None,
         oscillation_warning: bool = False,
         include_full_previous: bool = False,
+        diagnosis_block: str | None = None,
     ) -> list[ChatMessage]:
         """Assemble system + user(+correction) messages within budget."""
         system = ChatMessage(role="system", content=self.system_prompt)
@@ -81,6 +82,9 @@ class HistoryManager:
 
         if oscillation_warning:
             parts.append(f"## Circuit breaker\n{OSCILLATION_CIRCUIT_BREAKER}")
+
+        if diagnosis_block:
+            parts.append(diagnosis_block)
 
         if self._last_diff is not None:
             parts.append(
@@ -193,10 +197,11 @@ def _summarize_iteration(record: IterationRecord) -> str:
     else:
         kind = "ok"
     stage = f"[{verification.stage}] " if verification.stage else ""
+    klass = f"{{{record.failure_class}}} " if record.failure_class else ""
     summary = verification.summary.replace("\n", " ").strip()
     if len(summary) > 160:
         summary = summary[:157] + "..."
     diff_note = ""
     if record.structural_diff:
         diff_note = f" | {record.structural_diff.splitlines()[0]}"
-    return f"- iter {record.iteration}: {stage}{kind} — {summary}{diff_note}"
+    return f"- iter {record.iteration}: {stage}{klass}{kind} — {summary}{diff_note}"

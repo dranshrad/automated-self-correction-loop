@@ -27,6 +27,9 @@ def test_run_mode_succeeds_with_mock(tmp_path: Path) -> None:
     report = CorrectionLoop(config, agent=agent).run()
     assert report.exit_reason is ExitReason.SUCCESS
     assert (tmp_path / "artifacts" / "report.json").exists()
+    assert (tmp_path / "artifacts" / "metrics.json").exists()
+    assert report.metrics is not None
+    assert report.metrics["success"] is True
 
 
 def test_run_mode_self_heals_after_failure(tmp_path: Path) -> None:
@@ -47,6 +50,10 @@ def test_run_mode_self_heals_after_failure(tmp_path: Path) -> None:
     report = CorrectionLoop(config, agent=agent).run()
     assert report.exit_reason is ExitReason.SUCCESS
     assert len(report.iterations) == 2
+    assert report.iterations[0].failure_class in {"logic", "unknown"}
+    assert report.iterations[0].repair_hint
+    assert report.metrics is not None
+    assert report.metrics["failure_class_histogram"]
 
 
 def test_heal_mode_with_frozen_tests(tmp_path: Path) -> None:

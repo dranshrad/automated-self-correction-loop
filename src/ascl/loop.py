@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2026 Divyansh Gupta
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
-"""Shared generate → verify → correct orchestration with oscillation detection."""
+"""Shared generate → verify → diagnose → correct orchestration."""
 
 from __future__ import annotations
 
@@ -17,6 +17,7 @@ from ascl.history_manager import (
     OSCILLATION_CIRCUIT_BREAKER,
     HistoryManager,
 )
+from ascl.metrics import aggregate_metrics
 from ascl.models import (
     ChatMessage,
     ExitReason,
@@ -33,6 +34,7 @@ from ascl.runner import (
     DEFAULT_MEMORY_MB,
     ResourceLimits,
 )
+from ascl.taxonomy import FailureClassification, classify_failure, format_classification_block
 from ascl.verifiers import ExitCodeVerifier, PytestVerifier, Verifier
 
 
@@ -108,6 +110,7 @@ class CorrectionLoop:
         iterations: list[IterationRecord] = []
         previous_code: str | None = None
         latest_failure: str | None = None
+        diagnosis_block: str | None = None
         exit_reason = ExitReason.MAX_ITERATIONS
         final_code: str | None = None
         pending_oscillation_warning = False
@@ -118,6 +121,7 @@ class CorrectionLoop:
                 previous_code=previous_code,
                 latest_failure=latest_failure,
                 oscillation_warning=pending_oscillation_warning,
+                diagnosis_block=diagnosis_block,
             )
             pending_oscillation_warning = False
             token_estimate = self.history.estimate_prompt_tokens(messages)
@@ -127,20 +131,29 @@ class CorrectionLoop:
                 raw = self.agent.complete(messages)
                 code = extract_python_code(raw)
             except (AgentError, CodeParseError) as exc:
+                verification = VerificationResult(
+                    success=False,
+                    summary=str(exc),
+                    details=str(exc),
+                    stage="environment" if isinstance(exc, AgentError) else None,
+                )
+                parse_classification = classify_failure(verification, oscillated=False)
                 record = IterationRecord(
                     iteration=iteration,
                     code=previous_code or "",
-                    verification=VerificationResult(
-                        success=False,
-                        summary=str(exc),
-                        details=str(exc),
-                    ),
+                    verification=verification,
                     prompt_tokens_estimate=token_estimate,
                     raw_model_response=raw,
+                    failure_class=parse_classification.failure_class.value,
+                    repair_hint=parse_classification.repair_hint,
+                    classification_confidence=parse_classification.confidence,
+                    classification_evidence=parse_classification.evidence,
+                    classification_hypothesis=parse_classification.hypothesis,
                 )
                 iterations.append(record)
                 self.history.ingest_failure(record)
                 latest_failure = str(exc)
+                diagnosis_block = format_classification_block(parse_classification)
                 if isinstance(exc, AgentError) and previous_code is None:
                     exit_reason = ExitReason.CONFIG_ERROR
                     break
@@ -154,6 +167,10 @@ class CorrectionLoop:
             )
 
             verification = self.verifier.verify(code)
+            classification: FailureClassification | None = None
+            if not verification.success:
+                classification = classify_failure(verification, oscillated=oscillated)
+
             record = IterationRecord(
                 iteration=iteration,
                 code=code,
@@ -163,6 +180,19 @@ class CorrectionLoop:
                 code_digest=digest,
                 structural_diff=structural_text,
                 oscillation_detected=oscillated,
+                failure_class=(
+                    classification.failure_class.value if classification is not None else None
+                ),
+                repair_hint=classification.repair_hint if classification is not None else "",
+                classification_confidence=(
+                    classification.confidence if classification is not None else None
+                ),
+                classification_evidence=(
+                    classification.evidence if classification is not None else ""
+                ),
+                classification_hypothesis=(
+                    classification.hypothesis if classification is not None else ""
+                ),
             )
             iterations.append(record)
             previous_code = code
@@ -171,19 +201,19 @@ class CorrectionLoop:
 
             if verification.success:
                 exit_reason = ExitReason.SUCCESS
+                diagnosis_block = None
                 break
 
+            assert classification is not None
+            diagnosis_block = format_classification_block(classification)
+            failure_body = verification.details or verification.summary
             if oscillated:
                 pending_oscillation_warning = True
-                latest_failure = (
-                    f"{OSCILLATION_CIRCUIT_BREAKER}\n\n"
-                    f"{verification.details or verification.summary}"
-                )
-                # If the agent keeps oscillating through the remaining budget, surface it.
+                latest_failure = f"{OSCILLATION_CIRCUIT_BREAKER}\n\n{failure_body}"
                 if iteration == self.config.max_iterations:
                     exit_reason = ExitReason.OSCILLATION
             else:
-                latest_failure = verification.details or verification.summary
+                latest_failure = failure_body
 
             self.history.ingest_failure(record)
 
@@ -198,6 +228,8 @@ class CorrectionLoop:
             iterations=iterations,
             final_code=final_code,
         )
+        metrics = aggregate_metrics(report)
+        report.metrics = metrics.to_dict()
         self._write_report(report)
         return report
 
@@ -267,6 +299,11 @@ class CorrectionLoop:
         self.config.artifact_dir.mkdir(parents=True, exist_ok=True)
         path = self.config.artifact_dir / "report.json"
         path.write_text(json.dumps(report.to_dict(), indent=2), encoding="utf-8")
+        if report.metrics is not None:
+            (self.config.artifact_dir / "metrics.json").write_text(
+                json.dumps(report.metrics, indent=2),
+                encoding="utf-8",
+            )
         if report.final_code:
             (self.config.artifact_dir / "final_solution.py").write_text(
                 report.final_code,

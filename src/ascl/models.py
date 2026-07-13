@@ -77,6 +77,11 @@ class IterationRecord:
     code_digest: str = ""
     structural_diff: str = ""
     oscillation_detected: bool = False
+    failure_class: str | None = None
+    repair_hint: str = ""
+    classification_confidence: float | None = None
+    classification_evidence: str = ""
+    classification_hypothesis: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -88,6 +93,11 @@ class IterationRecord:
             "code_digest": self.code_digest,
             "structural_diff": self.structural_diff,
             "oscillation_detected": self.oscillation_detected,
+            "failure_class": self.failure_class,
+            "repair_hint": self.repair_hint,
+            "classification_confidence": self.classification_confidence,
+            "classification_evidence": self.classification_evidence,
+            "classification_hypothesis": self.classification_hypothesis,
         }
 
 
@@ -104,6 +114,7 @@ class RunReport:
     exit_reason: ExitReason
     iterations: list[IterationRecord] = field(default_factory=list)
     final_code: str | None = None
+    metrics: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -116,6 +127,7 @@ class RunReport:
             "exit_reason": self.exit_reason.value,
             "iterations": [item.to_dict() for item in self.iterations],
             "final_code": self.final_code,
+            "metrics": self.metrics,
         }
 
 

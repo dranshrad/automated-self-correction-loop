@@ -16,6 +16,7 @@ from ascl import __version__
 from ascl.agent import DEFAULT_MODELS, AgentError
 from ascl.history_manager import DEFAULT_MAX_CONTEXT_TOKENS
 from ascl.loop import CorrectionLoop, LoopConfig
+from ascl.metrics import RunMetrics, aggregate_metrics
 from ascl.models import ExitReason, Mode, ProviderName
 from ascl.runner import DEFAULT_MAX_PROCS, DEFAULT_MEMORY_MB, DEFAULT_TIMEOUT_SECONDS
 
@@ -80,15 +81,21 @@ def _shared_options(
     )
 
 
-def _print_report_summary(mode: Mode, reason: ExitReason, iterations: int, model: str) -> None:
+def _print_report_summary(
+    mode: Mode,
+    reason: ExitReason,
+    iterations: int,
+    model: str,
+    metrics: RunMetrics | None = None,
+) -> None:
     style = "green" if reason is ExitReason.SUCCESS else "red"
-    console.print(
-        Panel.fit(
-            f"[bold]{mode.value}[/bold] finished: [bold {style}]{reason.value}[/bold {style}]\n"
-            f"iterations={iterations}  model={model}",
-            title="ascl",
-        )
+    body = (
+        f"[bold]{mode.value}[/bold] finished: [bold {style}]{reason.value}[/bold {style}]\n"
+        f"iterations={iterations}  model={model}"
     )
+    if metrics is not None:
+        body += "\n\n" + metrics.format_summary()
+    console.print(Panel.fit(body, title="ascl"))
 
 
 @app.callback()
@@ -269,11 +276,13 @@ def _execute(config: LoopConfig) -> None:
         console.print(f"[red]Unexpected error:[/red] {exc}")
         raise typer.Exit(code=2) from exc
 
+    metrics = aggregate_metrics(report)
     _print_report_summary(
         report.mode,
         report.exit_reason,
         len(report.iterations),
         report.model,
+        metrics=metrics,
     )
     if config.artifact_dir:
         console.print(f"Artifacts written to {config.artifact_dir.resolve()}")

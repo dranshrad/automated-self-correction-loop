@@ -53,3 +53,11 @@ def format_failure_directive(
         f"Summary: {summary}\n\n"
         f"Details:\n{details.strip() or '(no additional details)'}\n"
     )
+
+
+def format_repair_strategy_block(repair_hint: str) -> str:
+    """Wrap a taxonomy repair hint for inclusion in the next user turn."""
+    hint = repair_hint.strip()
+    if not hint:
+        return ""
+    return f"## Repair strategy\n{hint}\n"

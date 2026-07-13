@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "automated-self-correction-loop"
-version = "0.2.0"
+version = "0.3.0"
 description = "Production-grade Python self-healing execution harness with dual run/heal modes"
 authors = ["Divyansh Gupta"]
 license = "AGPL-3.0-or-later"
