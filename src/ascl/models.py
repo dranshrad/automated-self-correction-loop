@@ -27,6 +27,7 @@ class ExitReason(StrEnum):
     CONFIG_ERROR = "config_error"
     INTERRUPTED = "interrupted"
     PARSE_ERROR = "parse_error"
+    OSCILLATION = "oscillation"
 
 
 @dataclass(frozen=True)
@@ -52,15 +53,16 @@ class VerificationResult:
     summary: str
     details: str = ""
     execution: ExecutionResult | None = None
+    stage: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
-        payload = {
+        return {
             "success": self.success,
             "summary": self.summary,
             "details": self.details,
             "execution": self.execution.to_dict() if self.execution else None,
+            "stage": self.stage,
         }
-        return payload
 
 
 @dataclass
@@ -72,6 +74,9 @@ class IterationRecord:
     verification: VerificationResult
     prompt_tokens_estimate: int = 0
     raw_model_response: str = ""
+    code_digest: str = ""
+    structural_diff: str = ""
+    oscillation_detected: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -80,6 +85,9 @@ class IterationRecord:
             "verification": self.verification.to_dict(),
             "prompt_tokens_estimate": self.prompt_tokens_estimate,
             "raw_model_response": self.raw_model_response,
+            "code_digest": self.code_digest,
+            "structural_diff": self.structural_diff,
+            "oscillation_detected": self.oscillation_detected,
         }
 
 

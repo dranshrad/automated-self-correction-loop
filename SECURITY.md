@@ -10,7 +10,9 @@ ASCL writes LLM-generated Python to disk and executes it via `subprocess` under 
 
 - Infinite loops → process-group `SIGKILL` after `--timeout`
 - Log bombs → stdout/stderr byte caps
+- Fork bombs / runaway allocs → Unix `RLIMIT_NPROC`, `RLIMIT_AS`, `RLIMIT_CPU` via `preexec_fn`
 - Accidental reuse of host API keys in child processes → runner strips `*_API_KEY` / provider keys from the child environment
+- Cheap rejection of broken syntax / obvious lint errors before spawning behavioral tests
 
 **Out of scope for v1 (not a sandbox):**
 

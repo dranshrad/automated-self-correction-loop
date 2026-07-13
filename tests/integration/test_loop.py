@@ -22,6 +22,7 @@ def test_run_mode_succeeds_with_mock(tmp_path: Path) -> None:
         provider=ProviderName.MOCK,
         max_iterations=3,
         artifact_dir=tmp_path / "artifacts",
+        enable_lint=False,
     )
     report = CorrectionLoop(config, agent=agent).run()
     assert report.exit_reason is ExitReason.SUCCESS
@@ -41,6 +42,7 @@ def test_run_mode_self_heals_after_failure(tmp_path: Path) -> None:
         provider=ProviderName.MOCK,
         max_iterations=3,
         artifact_dir=tmp_path / "run-heal",
+        enable_lint=False,
     )
     report = CorrectionLoop(config, agent=agent).run()
     assert report.exit_reason is ExitReason.SUCCESS
@@ -86,6 +88,7 @@ def test_heal_mode_with_frozen_tests(tmp_path: Path) -> None:
         max_iterations=4,
         timeout_seconds=15,
         artifact_dir=tmp_path / "heal",
+        enable_lint=False,
     )
     report = CorrectionLoop(config, agent=agent).run()
     assert report.exit_reason is ExitReason.SUCCESS

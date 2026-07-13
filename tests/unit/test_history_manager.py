@@ -68,3 +68,27 @@ def test_token_budget_truncates() -> None:
     )
     assert hist.estimate_prompt_tokens(messages) <= 250
     assert "history truncated" in messages[1].content or "Latest failure" in messages[1].content
+
+
+def test_structural_diff_preferred_over_full_dump() -> None:
+    hist = HistoryManager(system_prompt="SYS", user_prompt="task")
+    hist.note_code("def add(a, b):\n    return a - b\n", iteration=1)
+    hist.ingest_failure(
+        IterationRecord(
+            iteration=1,
+            code="def add(a, b):\n    return a - b\n",
+            verification=VerificationResult(success=False, summary="fail", details="boom"),
+        )
+    )
+    hist.note_code("def add(a, b):\n    return a + b\n", iteration=2)
+    messages = hist.build_messages(
+        iteration=3,
+        previous_code="def add(a, b):\n    return a + b\n",
+        latest_failure="assertion failed",
+    )
+    body = messages[1].content
+    assert "Structural changes" in body
+    assert "modified: add" in body
+    assert "Previous code reference" in body
+    assert "## Previous code\n```python" not in body
+    assert "return a + b" not in body  # full dump omitted

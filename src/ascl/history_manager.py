@@ -1,16 +1,22 @@
 # SPDX-FileCopyrightText: 2026 Divyansh Gupta
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
-"""Token-aware rolling window for recursive error history."""
+"""Token-aware rolling window with AST structural diff injection."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from ascl.ast_diff import StructuralDiff, compute_structural_diff
 from ascl.models import ChatMessage, IterationRecord
 
 DEFAULT_MAX_CONTEXT_TOKENS = 8000
-_COMPRESS_AFTER_ITERATION = 3
+
+OSCILLATION_CIRCUIT_BREAKER = (
+    "System Warning: You are oscillating between identical failing states. "
+    "Change your architectural approach rather than patching this function line-by-line. "
+    "Propose a materially different implementation."
+)
 
 
 def estimate_tokens(text: str) -> int:
@@ -28,7 +34,8 @@ class HistoryManager:
     Always preserves:
     - system rules
     - original user prompt
-    - latest failing code + crash/pytest log
+    - latest crash/pytest log
+    - structural AST diff vs prior iteration (instead of full monolith when possible)
 
     After iteration > 3, older failures collapse to one-line summaries.
     """
@@ -37,11 +44,23 @@ class HistoryManager:
     user_prompt: str
     max_context_tokens: int = DEFAULT_MAX_CONTEXT_TOKENS
     _summaries: list[str] = field(default_factory=list)
+    _last_code: str | None = None
+    _last_diff: StructuralDiff | None = None
+    _last_diff_iteration: int | None = None
 
     def ingest_failure(self, record: IterationRecord) -> None:
-        """Record a failed iteration for later prompt assembly."""
-        summary = _summarize_iteration(record)
-        self._summaries.append(summary)
+        """Record a failed iteration summary (structural delta already via note_code)."""
+        self._summaries.append(_summarize_iteration(record))
+
+    def note_code(self, code: str, iteration: int) -> StructuralDiff | None:
+        """Track code and return the structural diff vs the previous iteration."""
+        diff: StructuralDiff | None = None
+        if self._last_code is not None:
+            diff = compute_structural_diff(self._last_code, code)
+            self._last_diff = diff
+            self._last_diff_iteration = iteration
+        self._last_code = code
+        return diff
 
     def build_messages(
         self,
@@ -49,6 +68,8 @@ class HistoryManager:
         iteration: int,
         previous_code: str | None,
         latest_failure: str | None,
+        oscillation_warning: bool = False,
+        include_full_previous: bool = False,
     ) -> list[ChatMessage]:
         """Assemble system + user(+correction) messages within budget."""
         system = ChatMessage(role="system", content=self.system_prompt)
@@ -58,17 +79,53 @@ class HistoryManager:
             f"## Iteration\n{iteration}",
         ]
 
-        if previous_code:
+        if oscillation_warning:
+            parts.append(f"## Circuit breaker\n{OSCILLATION_CIRCUIT_BREAKER}")
+
+        if self._last_diff is not None:
+            parts.append(
+                "## Structural changes\n"
+                + self._last_diff.format_block(iteration=self._last_diff_iteration)
+            )
+            if self._last_diff.modified:
+                anchors = ", ".join(self._last_diff.modified)
+                parts.append(
+                    f"## Attention anchor\nFocus corrections on: {anchors}. "
+                    "Avoid unrelated rewrites."
+                )
+
+        # Prefer structural diffs; only dump full prior source when requested or
+        # when we have no diff yet (first correction).
+        if previous_code and (include_full_previous or self._last_diff is None):
             parts.append(f"## Previous code\n```python\n{previous_code}\n```")
+        elif previous_code and self._last_diff is not None:
+            # Compact footprint: keep a short hash pointer, not the monolith.
+            from ascl.ast_diff import code_hash
+
+            parts.append(
+                "## Previous code reference\n"
+                f"sha256={code_hash(previous_code)[:16]}… "
+                f"({len(previous_code.splitlines())} lines; "
+                "full dump omitted — see structural diff)"
+            )
 
         older = self._older_summaries(iteration)
         if older:
             parts.append("## Earlier failures (compressed)\n" + "\n".join(older))
 
         if latest_failure:
+            failure_header = "## Latest failure (full)\n"
+            if self._last_diff is not None and self._last_diff.modified:
+                changed = ", ".join(self._last_diff.modified)
+                failure_header = (
+                    f"## Latest failure (full)\n"
+                    f"In iteration {self._last_diff_iteration}, you changed "
+                    f"{changed}. This modification produced the following exception/"
+                    f"verification failure:\n\n"
+                )
             parts.append(
-                "## Latest failure (full)\n"
-                "Treat this as a systemic correction directive and return a complete "
+                failure_header
+                + "Treat this as a systemic correction directive and return a complete "
                 "corrected script in a single ```python``` fence.\n\n"
                 f"{latest_failure}"
             )
@@ -87,13 +144,10 @@ class HistoryManager:
         return sum(estimate_tokens(message.content) for message in messages)
 
     def _older_summaries(self, iteration: int) -> list[str]:
-        if iteration <= _COMPRESS_AFTER_ITERATION or not self._summaries:
-            # Still surface prior summaries when we have them, but keep full latest
-            # failure separate via latest_failure argument.
-            if len(self._summaries) <= 1:
-                return []
-            return self._summaries[:-1]
-        # Compress everything except the most recent summary line.
+        if not self._summaries:
+            return []
+        if len(self._summaries) <= 1:
+            return []
         return self._summaries[:-1]
 
     def _fit_to_budget(self, system_text: str, user_text: str) -> str:
@@ -103,14 +157,12 @@ class HistoryManager:
         if estimate_tokens(user_text) <= budget:
             return user_text
 
-        # Drop older compressed lines first, then truncate the middle of the body.
         lines = user_text.splitlines()
         compressed_idx = next(
             (i for i, line in enumerate(lines) if line.startswith("## Earlier failures")),
             None,
         )
         if compressed_idx is not None:
-            # Remove the compressed section entirely if over budget.
             end = compressed_idx + 1
             while end < len(lines) and not lines[end].startswith("## "):
                 end += 1
@@ -119,7 +171,6 @@ class HistoryManager:
             if estimate_tokens(user_text) <= budget:
                 return user_text
 
-        # Hard clip from the middle while preserving head (task) and tail (latest failure).
         chars_budget = budget * 4
         if len(user_text) <= chars_budget:
             return user_text
@@ -141,7 +192,11 @@ def _summarize_iteration(record: IterationRecord) -> str:
         kind = "failure"
     else:
         kind = "ok"
+    stage = f"[{verification.stage}] " if verification.stage else ""
     summary = verification.summary.replace("\n", " ").strip()
     if len(summary) > 160:
         summary = summary[:157] + "..."
-    return f"- iter {record.iteration}: {kind} — {summary}"
+    diff_note = ""
+    if record.structural_diff:
+        diff_note = f" | {record.structural_diff.splitlines()[0]}"
+    return f"- iter {record.iteration}: {stage}{kind} — {summary}{diff_note}"

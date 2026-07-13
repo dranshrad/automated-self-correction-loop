@@ -9,13 +9,13 @@ from ascl.verifiers import ExitCodeVerifier, PytestVerifier
 
 
 def test_exit_code_verifier_success() -> None:
-    verifier = ExitCodeVerifier(timeout_seconds=5)
+    verifier = ExitCodeVerifier(timeout_seconds=5, enable_lint=False)
     result = verifier.verify("print('hi')")
     assert result.success is True
 
 
 def test_exit_code_verifier_timeout() -> None:
-    verifier = ExitCodeVerifier(timeout_seconds=0.4)
+    verifier = ExitCodeVerifier(timeout_seconds=0.4, enable_lint=False)
     result = verifier.verify("while True:\n    pass\n")
     assert result.success is False
     assert result.execution is not None
@@ -28,7 +28,7 @@ def test_pytest_verifier(tmp_path: Path) -> None:
         "from solution import add\n\ndef test_add():\n    assert add(1, 2) == 3\n",
         encoding="utf-8",
     )
-    verifier = PytestVerifier(tests_path=tests, timeout_seconds=10)
+    verifier = PytestVerifier(tests_path=tests, timeout_seconds=10, enable_lint=False)
     ok = verifier.verify("def add(a, b):\n    return a + b\n")
     assert ok.success is True
     bad = verifier.verify("def add(a, b):\n    return a - b\n")

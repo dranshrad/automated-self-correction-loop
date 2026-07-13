@@ -17,11 +17,11 @@ from ascl.agent import DEFAULT_MODELS, AgentError
 from ascl.history_manager import DEFAULT_MAX_CONTEXT_TOKENS
 from ascl.loop import CorrectionLoop, LoopConfig
 from ascl.models import ExitReason, Mode, ProviderName
-from ascl.runner import DEFAULT_TIMEOUT_SECONDS
+from ascl.runner import DEFAULT_MAX_PROCS, DEFAULT_MEMORY_MB, DEFAULT_TIMEOUT_SECONDS
 
 app = typer.Typer(
     name="ascl",
-    help="Automated Self-Correction Loop — self-healing Python execution harness.",
+    help="Automated Self-Correction Loop — sandboxed self-healing Python agent harness.",
     no_args_is_help=True,
     add_completion=False,
 )
@@ -58,16 +58,25 @@ def _shared_options(
     model: str | None,
     max_context_tokens: int,
     artifact_dir: Path | None,
+    *,
+    enable_lint: bool,
+    memory_mb: int,
+    max_procs: int,
+    resource_limits: bool,
 ) -> LoopConfig:
     return LoopConfig(
         prompt=prompt,
-        mode=Mode.RUN,  # overwritten by callers
+        mode=Mode.RUN,
         max_iterations=max_iterations,
         timeout_seconds=timeout,
         provider=_resolve_provider(provider),
         model=model,
         max_context_tokens=max_context_tokens,
         artifact_dir=artifact_dir,
+        enable_lint=enable_lint,
+        memory_mb=memory_mb,
+        max_procs=max_procs,
+        resource_limits_enabled=resource_limits,
     )
 
 
@@ -119,6 +128,26 @@ def run_cmd(
         "--artifact-dir",
         help="Directory for report.json and per-iteration artifacts.",
     ),
+    lint: bool = typer.Option(
+        True,
+        "--lint/--no-lint",
+        help="Run ruff E/F after syntax checks (skipped if ruff missing).",
+    ),
+    memory_mb: int = typer.Option(
+        DEFAULT_MEMORY_MB,
+        "--memory-mb",
+        help="RLIMIT_AS soft ceiling for child processes (MiB).",
+    ),
+    max_procs: int = typer.Option(
+        DEFAULT_MAX_PROCS,
+        "--max-procs",
+        help="RLIMIT_NPROC ceiling to mitigate fork bombs.",
+    ),
+    resource_limits: bool = typer.Option(
+        True,
+        "--resource-limits/--no-resource-limits",
+        help="Apply Unix resource limits in the child process.",
+    ),
 ) -> None:
     """Generate and execute a script until it exits 0 (or retries are exhausted)."""
     config = _shared_options(
@@ -129,6 +158,10 @@ def run_cmd(
         model,
         max_context_tokens,
         artifact_dir,
+        enable_lint=lint,
+        memory_mb=memory_mb,
+        max_procs=max_procs,
+        resource_limits=resource_limits,
     )
     config.mode = Mode.RUN
     _execute(config)
@@ -175,6 +208,26 @@ def heal_cmd(
         "--artifact-dir",
         help="Directory for report.json and per-iteration artifacts.",
     ),
+    lint: bool = typer.Option(
+        True,
+        "--lint/--no-lint",
+        help="Run ruff E/F after syntax checks (skipped if ruff missing).",
+    ),
+    memory_mb: int = typer.Option(
+        DEFAULT_MEMORY_MB,
+        "--memory-mb",
+        help="RLIMIT_AS soft ceiling for child processes (MiB).",
+    ),
+    max_procs: int = typer.Option(
+        DEFAULT_MAX_PROCS,
+        "--max-procs",
+        help="RLIMIT_NPROC ceiling to mitigate fork bombs.",
+    ),
+    resource_limits: bool = typer.Option(
+        True,
+        "--resource-limits/--no-resource-limits",
+        help="Apply Unix resource limits in the child process.",
+    ),
 ) -> None:
     """Heal an implementation until a frozen pytest suite passes."""
     if tests is None and not scaffold_tests:
@@ -189,6 +242,10 @@ def heal_cmd(
         model,
         max_context_tokens,
         artifact_dir,
+        enable_lint=lint,
+        memory_mb=memory_mb,
+        max_procs=max_procs,
+        resource_limits=resource_limits,
     )
     config.mode = Mode.HEAL
     config.tests_path = tests
@@ -223,7 +280,6 @@ def _execute(config: LoopConfig) -> None:
     raise typer.Exit(code=_exit_code_for(report.exit_reason))
 
 
-# Typer wants a callable for poetry scripts / python -m
 def run() -> None:
     app()
 

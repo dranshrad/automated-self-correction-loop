@@ -19,9 +19,16 @@ Only the verifier differs between `run` and `heal`.
 
 ## Why these safeguards
 
-1. **Dynamic safe-execution / test harness** — `heal` runs candidates against a user-provided or once-scaffolded pytest suite; tests are frozen so the model cannot “fix” the goalposts.
-2. **Infinite-loop & timeout protections** — `subprocess.Popen` with process-group kill, default 5s timeout, and stdout/stderr byte caps.
-3. **Token-aware context window decimator** — preserves system rules, the original task, and the latest crash log; compresses older iterations after iteration 3 under `--max-context-tokens`.
+1. **Context-insulated execution** — Unix `resource` limits (`RLIMIT_AS`, `RLIMIT_NPROC`, `RLIMIT_CPU`) plus process-group kill, timeouts, and stdout/stderr caps.
+2. **Multi-stage verification** — `ast.parse` → optional `ruff` E/F → behavioral (`run` exit code / `heal` pytest). Static failures never spawn the heavyweight runner.
+3. **AST diff history** — structural function/class deltas replace monolithic code dumps in the correction prompt.
+4. **Oscillation circuit breaker** — rolling code hashes detect A↔B thrashing and inject an architectural-change directive.
+5. **Frozen test scaffolds in `heal`** — the model cannot “fix” the goalposts.
+
+```text
+generate → static checks → isolate-execute → verify → AST-diff history → retry
+                 ↘ syntax/lint fail (cheap)        ↗ oscillation warning
+```
 
 ## Install
 
@@ -84,15 +91,26 @@ poetry run ascl heal --provider openai --tests path/to/tests --prompt "..."
 ```text
 src/ascl/
   cli.py              # Typer: run | heal | version
-  loop.py             # Shared correction loop
+  loop.py             # Shared loop + oscillation detector
   agent.py            # Anthropic / OpenAI / Mock
-  runner.py           # Tempdir + Popen + timeout + caps
+  runner.py           # Tempdir + Popen + timeout + RLIMIT_* caps
   parser.py           # Fenced code extraction
-  history_manager.py  # Token-budget pruning
-  verifiers.py        # ExitCodeVerifier | PytestVerifier
+  history_manager.py  # Token-budget pruning + AST diff injection
+  ast_diff.py         # Structural function/class diffs
+  verifiers.py        # syntax → lint → behavioral pipeline
   models.py           # Dataclasses / enums
   prompts.py          # System + correction templates
 ```
+
+## Sandbox knobs
+
+```bash
+poetry run ascl run --provider mock --prompt "..." \
+  --memory-mb 256 --max-procs 32 --lint \
+  --resource-limits
+```
+
+Use `--no-resource-limits` or `--no-lint` when debugging the harness itself.
 
 ## Security
 
@@ -106,7 +124,7 @@ If you run a modified version as a network service, AGPL requires you to offer t
 
 ## Roadmap (out of v1)
 
-- Docker / seccomp jail
-- cgroup memory limits
+- Docker / seccomp / gVisor jail (beyond `resource` limits)
+- cgroup memory limits on Linux hosts
 - Multi-file project healing
 - Exact tokenizer-backed budgets (tiktoken)

@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2026 Divyansh Gupta
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
-"""Isolated subprocess execution with timeouts and output caps."""
+"""Isolated subprocess execution with timeouts, output caps, and resource limits."""
 
 from __future__ import annotations
 
@@ -12,12 +12,36 @@ import subprocess
 import sys
 import tempfile
 import time
+from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
 
 from ascl.models import ExecutionResult
 
 DEFAULT_TIMEOUT_SECONDS = 5.0
 DEFAULT_MAX_OUTPUT_BYTES = 256 * 1024
+DEFAULT_MEMORY_MB = 256
+DEFAULT_MAX_PROCS = 32
+
+
+@dataclass(frozen=True)
+class ResourceLimits:
+    """
+    Best-effort Unix resource constraints applied in the child via ``preexec_fn``.
+
+    These are not a container jail — see SECURITY.md — but they blunt fork bombs
+    and runaway allocations from hallucinated code.
+    """
+
+    memory_mb: int = DEFAULT_MEMORY_MB
+    max_procs: int = DEFAULT_MAX_PROCS
+    cpu_seconds: int | None = None
+    enabled: bool = True
+
+    def resolved_cpu_seconds(self, timeout_seconds: float) -> int:
+        if self.cpu_seconds is not None and self.cpu_seconds > 0:
+            return self.cpu_seconds
+        return max(1, int(timeout_seconds) + 1)
 
 
 class RunnerError(RuntimeError):
@@ -32,11 +56,13 @@ def run_python_script(
     cwd: Path | None = None,
     filename: str = "script.py",
     extra_env: dict[str, str] | None = None,
+    resource_limits: ResourceLimits | None = None,
 ) -> ExecutionResult:
     """
     Write ``code`` to a temp file (or ``cwd``) and execute it under a hard timeout.
 
     Uses a new process session so the entire process group can be killed on timeout.
+    On Unix, optional ``resource`` limits bound address space, CPU, and process count.
     """
     if timeout_seconds <= 0:
         raise RunnerError("timeout_seconds must be positive")
@@ -61,6 +87,7 @@ def run_python_script(
             timeout_seconds=timeout_seconds,
             max_output_bytes=max_output_bytes,
             extra_env=extra_env,
+            resource_limits=resource_limits or ResourceLimits(),
         )
     finally:
         if cleanup is not None:
@@ -74,6 +101,7 @@ def run_command(
     timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
     max_output_bytes: int = DEFAULT_MAX_OUTPUT_BYTES,
     extra_env: dict[str, str] | None = None,
+    resource_limits: ResourceLimits | None = None,
 ) -> ExecutionResult:
     """Run an arbitrary command in ``cwd`` with the same isolation guarantees."""
     if not command:
@@ -85,6 +113,7 @@ def run_command(
         timeout_seconds=timeout_seconds,
         max_output_bytes=max_output_bytes,
         extra_env=extra_env,
+        resource_limits=resource_limits or ResourceLimits(),
     )
 
 
@@ -95,6 +124,7 @@ def _execute(
     timeout_seconds: float,
     max_output_bytes: int,
     extra_env: dict[str, str] | None,
+    resource_limits: ResourceLimits,
 ) -> ExecutionResult:
     env = os.environ.copy()
     # Keep generated code from inheriting secrets by default; callers can opt in.
@@ -105,6 +135,10 @@ def _execute(
         env.update(extra_env)
     env.setdefault("PYTHONUNBUFFERED", "1")
     env.setdefault("PYTHONDONTWRITEBYTECODE", "1")
+
+    preexec = None
+    if resource_limits.enabled and os.name == "posix":
+        preexec = _make_preexec(resource_limits, timeout_seconds)
 
     started = time.perf_counter()
     proc = subprocess.Popen(
@@ -117,6 +151,7 @@ def _execute(
         text=True,
         encoding="utf-8",
         errors="replace",
+        preexec_fn=preexec,
     )
 
     timed_out = False
@@ -149,6 +184,36 @@ def _execute(
         duration_ms=duration_ms,
         truncated=truncated,
     )
+
+
+def _make_preexec(limits: ResourceLimits, timeout_seconds: float) -> Callable[[], None]:
+    memory_bytes = max(1, limits.memory_mb) * 1024 * 1024
+    max_procs = max(1, limits.max_procs)
+    cpu_seconds = limits.resolved_cpu_seconds(timeout_seconds)
+
+    def _apply() -> None:
+        try:
+            import resource
+        except ImportError:  # pragma: no cover - non-Unix
+            return
+
+        # Address space / virtual memory ceiling (best-effort; platform-dependent).
+        with contextlib.suppress(ValueError, OSError):
+            resource.setrlimit(resource.RLIMIT_AS, (memory_bytes, memory_bytes))
+
+        # Soft-cap fork bombs from hallucinated spawn loops.
+        with contextlib.suppress(ValueError, OSError):
+            resource.setrlimit(resource.RLIMIT_NPROC, (max_procs, max_procs))
+
+        # CPU time budget slightly above wall-clock timeout.
+        with contextlib.suppress(ValueError, OSError):
+            resource.setrlimit(resource.RLIMIT_CPU, (cpu_seconds, cpu_seconds))
+
+        # Discourage core dumps filling disks.
+        with contextlib.suppress(ValueError, OSError):
+            resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
+
+    return _apply
 
 
 def _kill_process_group(proc: subprocess.Popen[str]) -> None:
