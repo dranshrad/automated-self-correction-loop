@@ -71,6 +71,13 @@ if command -v asciinema >/dev/null 2>&1; then
     || true
 fi
 
+# Optional GIF for GitHub README when agg is installed.
+GIF="docs/demo/heal-fibonacci.gif"
+if command -v agg >/dev/null 2>&1 && [[ -f "$CAST" ]]; then
+  agg --speed 1.5 --font-size 14 --theme monokai "$CAST" "$GIF" || true
+  echo "GIF written to $GIF"
+fi
+
 echo "Demo artifacts written to $DEMO_DIR"
 echo "Transcript written to $TRANSCRIPT"
 exit "$STATUS"

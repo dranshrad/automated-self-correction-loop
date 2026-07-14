@@ -1,3 +1,5 @@
+![60s proof: assertion fail → diagnose → heal → pass](docs/demo/heal-fibonacci.gif)
+
 # Automated Self-Correction Loop (ASCL)
 
 **Execution-grounded verified repair engine** · **AGPL-3.0-or-later** · Python 3.11+ · Typer CLI
@@ -13,12 +15,14 @@ An LLM proposes Python; static checks and an isolated subprocess observe the res
 
 Watch the concept in ~15 seconds (mock provider, no API key):
 
-1. **Terminal recording** — `asciinema play docs/demo/heal-fibonacci.cast`
-2. **Transcript** — [docs/demo/heal-fibonacci.md](docs/demo/heal-fibonacci.md)
-3. **Artifacts** — [examples/demo/fibonacci-heal/](examples/demo/fibonacci-heal/) (checked-in `report.json` + `metrics.json`)
+1. **GIF** — [docs/demo/heal-fibonacci.gif](docs/demo/heal-fibonacci.gif) (top of this README)
+2. **Terminal recording** — `asciinema play docs/demo/heal-fibonacci.cast`
+3. **Transcript** — [docs/demo/heal-fibonacci.md](docs/demo/heal-fibonacci.md)
+4. **Artifacts** — [examples/demo/fibonacci-heal/](examples/demo/fibonacci-heal/) (checked-in `report.json` + `metrics.json`)
 
 ```bash
 bash scripts/regenerate_demo.sh
+# requires: asciinema + agg (brew install asciinema agg)
 ```
 
 **Iteration 1 diagnosis** (from the checked-in run):
